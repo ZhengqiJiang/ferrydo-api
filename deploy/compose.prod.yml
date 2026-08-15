@@ -1,0 +1,118 @@
+services:
+  new-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: ferrydo-api
+    restart: unless-stopped
+    init: true
+    command: --log-dir /app/logs
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - app_data:/data
+      - app_logs:/app/logs
+    environment:
+      SQL_DSN: "postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}"
+      REDIS_CONN_STRING: "redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0"
+      SESSION_SECRET: "${SESSION_SECRET:?SESSION_SECRET is required}"
+      CRYPTO_SECRET: "${CRYPTO_SECRET:?CRYPTO_SECRET is required}"
+      SESSION_COOKIE_SECURE: "true"
+      SESSION_COOKIE_TRUSTED_URL: "https://api.ferrydo.com"
+      FRONTEND_BASE_URL: "https://api.ferrydo.com"
+      TRUSTED_PROXIES: "172.30.0.1/32"
+      TZ: "Asia/Shanghai"
+      GIN_MODE: "release"
+      ERROR_LOG_ENABLED: "true"
+      BATCH_UPDATE_ENABLED: "true"
+      NODE_NAME: "ferrydo-api-node-1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ferrydo
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O - http://localhost:3000/api/status | grep -q '"success":true'
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: ferrydo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:?POSTGRES_USER is required}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      POSTGRES_DB: "${POSTGRES_DB:?POSTGRES_DB is required}"
+      TZ: "UTC"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ferrydo
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    container_name: ferrydo-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --save
+      - ""
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      TZ: "UTC"
+    networks:
+      - ferrydo
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli -a "$${REDIS_PASSWORD}" ping 2>/dev/null | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+volumes:
+  app_data:
+  app_logs:
+  postgres_data:
+
+networks:
+  ferrydo:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
