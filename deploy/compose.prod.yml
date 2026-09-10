@@ -18,7 +18,7 @@ services:
       SESSION_SECRET: "${SESSION_SECRET:?SESSION_SECRET is required}"
       CRYPTO_SECRET: "${CRYPTO_SECRET:?CRYPTO_SECRET is required}"
       SESSION_COOKIE_SECURE: "true"
-      SESSION_COOKIE_TRUSTED_URL: "https://api.ferrydo.com"
+      SESSION_COOKIE_TRUSTED_URL: "https://api.ferrydo.com,https://ferrydo.com"
       FRONTEND_BASE_URL: "https://api.ferrydo.com"
       TRUSTED_PROXIES: "172.30.0.1/32"
       TZ: "Asia/Shanghai"
